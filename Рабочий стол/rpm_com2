@@ -1,0 +1,67 @@
+1. Среда и проект
+mkdir exam && cd exam — создать папку
+python3 -m venv venv — создать окружение
+source venv/bin/activate — активировать (Ubuntu)
+pip install django python-dotenv whitenoise — установить всё сразу
+django-admin startproject config . — создать проект (точка важна!)
+python manage.py startapp products — создать приложение
+
+2. База данных и запуск
+python manage.py makemigrations — создать миграции после изменения models.py
+python manage.py migrate — применить в БД
+python manage.py createsuperuser — создать админа
+python manage.py collectstatic — собрать статику (для DEBUG=False)
+python manage.py test — запустить тесты
+python manage.py runserver — старт сервера
+
+3. Готовые импорты для файлов (Копировать текст)
+
+Для файла models.py:
+from django.db import models
+from django.core.exceptions import ValidationError
+from django.utils import timezone
+
+Для файла forms.py:
+from django import forms
+from .models import Product
+
+Для файла views.py:
+from django.shortcuts import render, redirect, get_object_or_404
+from .models import Product
+from .forms import ProductForm
+
+Для файла tests.py:
+from django.test import TestCase, Client
+
+Для файла settings.py:
+import os
+from dotenv import load_dotenv
+
+Для файла middleware.py:
+(импорты не нужны)
+
+Для файла admin.py:
+from django.contrib import admin
+from .models import Product
+
+ ПОШАГОВЫЙ ПЛАН ДЕЙСТВИЙ (ЭКЗАМЕН)
+Подготовка: Создать папку → venv → activate → pip install (django, dotenv, whitenoise).
+Структура: startproject → startapp products → добавить 'products' в INSTALLED_APPS.
+Бэкенд (Занятие 1): Написать models.py с clean() → makemigrations → migrate → createsuperuser → зарегистрировать в admin.py.
+Инфраструктура (Занятие 2): Создать .env → настроить settings.py (dotenv, middleware, static) → collectstatic → написать middleware.py → написать тест в tests.py.
+Фронтенд (Занятие 3): Создать папки templates/products/ → написать base.html, list, form, delete → создать forms.py (ModelForm) → написать 4 view-функции → настроить urls.py (локальные + главные).
+Финал: Запустить сервер → проверить CRUD через браузер → убедиться, что валидация работает и стили на месте.
+
+
+ ВАЖНЫЕ МОМЕНТЫ (TEXT ONLY)
+Middleware НЕ в INSTALLED_APPS: Только в список MIDDLEWARE. Иначе ошибка запуска ImproperlyConfigured.
+Порядок Whitenoise: Строго 2-м в MIDDLEWARE (сразу после SecurityMiddleware). Иначе стили не подгрузятся.
+Default даты: Всегда default=timezone.now (без скобок!). Со скобками () дата "застынет" на моменте запуска сервера.
+Валидация clean(): В админке работает автоматически. В коде (objects.create) нужно вызывать full_clean() вручную перед save().
+DEBUG=False: Django перестает отдавать статику. Без collectstatic + Whitenoise админка будет без CSS.
+CSRF Token: В каждом <form> в шаблонах обязательно {% csrf_token %}, иначе POST-запросы будут отклонены (ошибка 403).
+Имена URL: В шаблонах {% url 'name' %} имя должно точь-в-точь совпадать с name='...' в urls.py.
+Точка в startproject: startproject name . создает структуру в текущей папке. Без точки — лишняя вложенность папок.
+Return в Middleware: Метод __call__ обязан возвращать response. Вернет None — получим AttributeError.
+get_object_or_404: Используйте вместо прямого .get(). Автоматически вернет красивую 404 страницу, если объект не найден.
+
