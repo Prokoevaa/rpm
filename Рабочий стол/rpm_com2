@@ -44,6 +44,22 @@ from dotenv import load_dotenv
 from django.contrib import admin
 from .models import Product
 
+
+def clean(self):
+    super().clean()
+    
+    errors = {}
+
+    # 1. Проверка названия (не пустое)
+    if not self.title or self.title.strip() == "":
+        errors['title'] = 'Название книги не может быть пустым.'
+
+    # Если есть ошибки, выбрасываем их все сразу
+    if errors:
+        raise ValidationError(errors)
+
+
+
  ПОШАГОВЫЙ ПЛАН ДЕЙСТВИЙ (ЭКЗАМЕН)
 Подготовка: Создать папку → venv → activate → pip install (django, dotenv, whitenoise).
 Структура: startproject → startapp products → добавить 'products' в INSTALLED_APPS.
