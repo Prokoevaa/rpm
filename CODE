@@ -1,0 +1,327 @@
+ 1 Файл: exam_project/settings.py
+
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+SECRET_KEY = os.getenv('SECRET_KEY')
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
+ALLOWED_HOSTS = ['*']
+
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'products',
+]
+
+MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'products.middleware.MetricsMiddleware',
+]
+
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+
+
+
+2 Файл: exam_project/urls.py (Корневой)
+
+from django.contrib import admin
+from django.urls import path, include
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('products/', include('products.urls')),
+]
+
+
+
+
+
+3 Файл: products/models.py
+
+from django.db import models
+from django.core.exceptions import ValidationError
+
+class Product(models.Model):
+    name = models.CharField(max_length=150, verbose_name="Название")
+    category = models.CharField(max_length=100, verbose_name="Категория")
+    price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Цена")
+    sku = models.CharField(max_length=50, unique=True, verbose_name="Артикул")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
+
+    def __str__(self):
+        return self.name
+
+    def clean(self):
+        if not self.name or self.name.strip() == '':
+            raise ValidationError({'name': 'Название товара не может быть пустым.'})
+        if self.price <= 0:
+            raise ValidationError({'price': 'Цена должна быть больше нуля.'})
+        if Product.objects.filter(sku=self.sku).exclude(pk=self.pk).exists():
+            raise ValidationError({'sku': 'Товар с таким артикулом уже существует.'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+
+
+4 Файл: products/admin.py
+
+from django.contrib import admin
+from .models import Product
+
+@admin.register(Product)
+class ProductAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'category', 'price', 'sku', 'created_at')
+    list_filter = ('category',)
+    search_fields = ('name', 'sku')
+
+
+
+5 Файл: products/middleware.py
+
+class MetricsMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+        self.total_requests = 0
+        self.status_2xx = 0
+        self.status_4xx = 0
+        self.status_5xx = 0
+        self.request_count_since_last_log = 0
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        self.total_requests += 1
+        self.request_count_since_last_log += 1
+        
+        status_code = response.status_code
+        if 200 <= status_code < 300:
+            self.status_2xx += 1
+        elif 400 <= status_code < 500:
+            self.status_4xx += 1
+        elif 500 <= status_code < 600:
+            self.status_5xx += 1
+            
+        if self.request_count_since_last_log >= 5:
+            self._log_metrics()
+            self.request_count_since_last_log = 0
+            
+        return response
+
+    def _log_metrics(self):
+        print("=== METRICS ===")
+        print(f"Total requests: {self.total_requests}")
+        print(f"2xx: {self.status_2xx}, 4xx: {self.status_4xx}, 5xx: {self.status_5xx}")
+        print("===============")
+
+
+
+
+6 products/forms.py
+
+from django import forms
+from .models import Product
+
+class ProductForm(forms.ModelForm):
+    class Meta:
+        model = Product
+        fields = ['name', 'category', 'price', 'sku']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'category': forms.TextInput(attrs={'class': 'form-control'}),
+            'price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'sku': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+
+
+
+
+7 Файл: products/views.py
+
+from django.shortcuts import render, redirect, get_object_or_404
+from django.http import JsonResponse
+from .models import Product
+from .forms import ProductForm
+
+def health_check(request):
+    return JsonResponse({'status': 'ok'})
+
+def product_list(request):
+    products = Product.objects.all().order_by('-created_at')
+    return render(request, 'products/product_list.html', {'products': products})
+
+def product_create(request):
+    if request.method == 'POST':
+        form = ProductForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('product_list')
+    else:
+        form = ProductForm()
+    return render(request, 'products/product_form.html', {'form': form, 'product': None})
+
+def product_update(request, pk):
+    product = get_object_or_404(Product, pk=pk)
+    if request.method == 'POST':
+        form = ProductForm(request.POST, instance=product)
+        if form.is_valid():
+            form.save()
+            return redirect('product_list')
+    else:
+        form = ProductForm(instance=product)
+    return render(request, 'products/product_form.html', {'form': form, 'product': product})
+
+def product_delete(request, pk):
+    product = get_object_or_404(Product, pk=pk)
+    if request.method == 'POST':
+        product.delete()
+        return redirect('product_list')
+    return render(request, 'products/product_confirm_delete.html', {'product': product})
+
+
+
+
+8 Файл: products/urls.py
+
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path('', views.product_list, name='product_list'),
+    path('create/', views.product_create, name='product_create'),
+    path('<int:pk>/update/', views.product_update, name='product_update'),
+    path('<int:pk>/delete/', views.product_delete, name='product_delete'),
+    path('ping/', views.health_check, name='ping'),
+]
+
+
+
+
+9 Файл: products/tests.py
+
+from django.test import TestCase, Client
+
+class HealthCheckTest(TestCase):
+    def test_ping_endpoint(self):
+        client = Client()
+        response = client.get('/products/ping/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'status': 'ok'})
+
+
+
+
+10 products/templates/products/base.html
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Управление товарами{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-4">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>
+
+
+
+
+11 Файл: products/templates/products/product_list.html
+
+{% extends 'products/base.html' %}
+{% block title %}Список товаров{% endblock %}
+{% block content %}
+<h1>Товары</h1>
+<a href="{% url 'product_create' %}" class="btn btn-primary mb-3">Добавить товар</a>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Название</th>
+            <th>Категория</th>
+            <th>Цена</th>
+            <th>Артикул</th>
+            <th>Действия</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for product in products %}
+        <tr>
+            <td>{{ product.id }}</td>
+            <td>{{ product.name }}</td>
+            <td>{{ product.category }}</td>
+            <td>{{ product.price }}</td>
+            <td>{{ product.sku }}</td>
+            <td>
+                <a href="{% url 'product_update' product.id %}" class="btn btn-sm btn-warning">Изменить</a>
+                <a href="{% url 'product_delete' product.id %}" class="btn btn-sm btn-danger">Удалить</a>
+            </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6">Нет товаров. Добавьте первый.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
+
+
+
+
+
+12 Файл: products/templates/products/product_form.html
+
+{% extends 'products/base.html' %}
+{% block title %}{% if product %}Редактирование{% else %}Создание{% endif %}{% endblock %}
+{% block content %}
+<h1>{% if product %}Редактирование товара{% else %}Новый товар{% endif %}</h1>
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" class="btn btn-success">Сохранить</button>
+    <a href="{% url 'product_list' %}" class="btn btn-secondary">Отмена</a>
+</form>
+{% endblock %}
+
+
+
+13 Файл: products/templates/products/product_confirm_delete.html
+
+{% extends 'products/base.html' %}
+{% block title %}Удаление товара{% endblock %}
+{% block content %}
+<h1>Удалить товар?</h1>
+<p>Вы уверены, что хотите удалить <strong>"{{ product }}"</strong>?</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Да, удалить</button>
+    <a href="{% url 'product_list' %}" class="btn btn-secondary">Нет, отмена</a>
+</form>
+{% endblock %}
+
+
+
+14 .env
+
+DEBUG=False
+SECRET_KEY=ваш_очень_сложный_секретный_ключ
