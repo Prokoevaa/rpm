@@ -39,6 +39,9 @@ from dotenv import load_dotenv
 # 'whitenoise.middleware.WhiteNoiseMiddleware',  #после первого в мидле 
 # 'library.middleware.RequestMetricsMiddleware'  #в конце (приложение.файл.класс)
 
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
 Для файла middleware.py:
 (импорты не нужны)
 
