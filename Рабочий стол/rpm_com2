@@ -2,7 +2,7 @@
 mkdir exam && cd exam — создать папку
 python3 -m venv venv — создать окружение
 source venv/bin/activate — активировать (Ubuntu)
-pip install django python-dotenv whitenoise — установить всё сразу
+pip install django python-dotenv whitenoise — установить всё сразу      (pip install --force-reinstall python-dotenv)
 django-admin startproject config . — создать проект (точка важна!)
 python manage.py startapp products — создать приложение
 
