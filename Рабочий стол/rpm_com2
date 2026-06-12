@@ -36,6 +36,8 @@ from django.test import TestCase, Client
 Для файла settings.py:
 import os
 from dotenv import load_dotenv
+# 'whitenoise.middleware.WhiteNoiseMiddleware',  #после первого в мидле 
+# 'library.middleware.RequestMetricsMiddleware'  #в конце (приложение.файл.класс)
 
 Для файла middleware.py:
 (импорты не нужны)
